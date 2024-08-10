@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transmisor OCC</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        button {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #ccc;
+        }
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+        }
+        .symbols-container {
+            margin-top: 20px;
+        }
+        .symbols-container ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .symbols-container li {
+            background: #f0f0f0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            margin-bottom: 5px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Transmisor OCC</h1>
+        <div class="form-group">
+            <label for="data">Datos para transmitir:</label>
+            <input type="text" id="data" name="data">
+        </div>
+        <div class="form-group">
+            <label for="alpha">Alpha:</label>
+            <input type="number" id="alpha" name="alpha" step="0.1" value="1.0">
+        </div>
+        <div class="form-group">
+            <label for="video_name">Nombre del Video:</label>
+            <input type="text" id="video_name" name="video_name" value="transmission">
+        </div>
+        <div class="form-group">
+            <label for="save_option">Guardar Video:</label>
+            <select id="save_option" name="save_option">
+                <option value="local">Local</option>
+                <option value="download">Descargar desde la WEB</option>
+            </select>
+        </div>
+        <div class="button-group">
+            <button id="start">Iniciar Transmisión</button>
+            <button id="stop">Detener Transmisión</button>
+            <button id="show_symbols">Mostrar Símbolos</button>
+        </div>
+        <div id="recordingIndicator" style="text-align: center; color: red; font-weight: bold; display: none;">Grabando...</div>
+        <div class="symbols-container">
+            <h2>Símbolos a Transmitir</h2>
+            <ul id="symbols"></ul>
+        </div>
+        <div class="button-group">
+            <button id="led_on" style="background: green;">Encender LED</button>
+            <button id="led_off" style="background: red;">Apagar LED</button>
+        </div>
+        <div class="footer">
+            Jose Castillo y Genesis Alvarado
+        </div>
+    </div>
+
+    <script>
+        let videoPath = '';
+
+        document.getElementById('start').addEventListener('click', function() {
+            var data = document.getElementById('data').value;
+            var alpha = parseFloat(document.getElementById('alpha').value);
+            var videoName = document.getElementById('video_name').value;
+            var saveOption = document.getElementById('save_option').value;
+
+            fetch('/transmit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'data=' + encodeURIComponent(data) + '&alpha=' + encodeURIComponent(alpha) + '&video_name=' + encodeURIComponent(videoName) + '&save_option=' + encodeURIComponent(saveOption),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(data);
+                videoPath = data.video_path;
+                document.getElementById('recordingIndicator').style.display = 'block';
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error: ' + error.message);
+            });
+        });
+
+        document.getElementById('stop').addEventListener('click', function() {
+            fetch('/stop_recording', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(data);
+                document.getElementById('recordingIndicator').style.display = 'none';
+                if (videoPath && document.getElementById('save_option').value === 'download') {
+                    window.location.href = '/download_video?video_path=' + encodeURIComponent(videoPath);
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error: ' + error.message);
+            });
+        });
+
+        document.getElementById('show_symbols').addEventListener('click', function() {
+            var data = document.getElementById('data').value;
+
+            fetch('/show_symbols', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'data=' + encodeURIComponent(data),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    var symbolsList = document.getElementById('symbols');
+                    symbolsList.innerHTML = '';
+                    data.symbols.forEach(function(symbol) {
+                        var li = document.createElement('li');
+                        li.textContent = symbol;
+                        symbolsList.appendChild(li);
+                    });
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error: ' + error.message);
+            });
+        });
+
+        document.getElementById('led_on').addEventListener('click', function() {
+            fetch('/control_led', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=on',
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error: ' + error.message);
+            });
+        });
+
+        document.getElementById('led_off').addEventListener('click', function() {
+            fetch('/control_led', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=off',
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error: ' + error.message);
+            });
+        });
+    </script>
+</body>
+</html>
+
